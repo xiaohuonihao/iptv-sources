@@ -50,6 +50,30 @@ jobs:
       - run: pnpm m3u
       - run: sudo apt-get install -y tree
 
+      # ⬇️⬇️⬇️ 从这里开始是新增的压缩步骤 ⬇️⬇️⬇️
+      
+      - name: Compress large EPG file (fix Cloudflare 25MB limit)
+        run: |
+          EPG_FILE="m3u/epg/epg_pw.xml"
+          if [ -f "$EPG_FILE" ]; then
+            SIZE=$(stat -c%s "$EPG_FILE" 2>/dev/null || stat -f%z "$EPG_FILE" 2>/dev/null)
+            MAX_SIZE=$((25 * 1024 * 1024))
+            
+            if [ $SIZE -gt $MAX_SIZE ]; then
+              echo "⚠️  EPG 文件过大 ($(numfmt --to=iec $SIZE))，正在压缩..."
+              gzip -9 -c "$EPG_FILE" > "${EPG_FILE}.tmp"
+              mv "${EPG_FILE}.tmp" "$EPG_FILE"
+              NEW_SIZE=$(stat -c%s "$EPG_FILE" 2>/dev/null || stat -f%z "$EPG_FILE" 2>/dev/null)
+              echo "✅ 压缩后大小: $(numfmt --to=iec $NEW_SIZE)"
+            else
+              echo "✅ EPG 文件大小正常 ($(numfmt --to=iec $SIZE))"
+            fi
+          else
+            echo "ℹ️  未找到 epg/epg_pw.xml 文件，跳过压缩"
+          fi
+      
+      # ⬆️⬆️⬆️ 压缩步骤结束 ⬆️⬆️⬆️
+
       - name: Publish m3u (Cloudflare direct upload or empty commit)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
